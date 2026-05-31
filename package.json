@@ -4,10 +4,10 @@
   "description": "Automated data broker opt-out runner — removes your personal info from 30+ people-search and data broker sites on a monthly schedule",
   "main": "watcher.js",
   "scripts": {
-    "setup": "node setup.js",
+    "setup": "npx camoufox-js fetch",
     "start": "node watcher.js",
     "run": "bash run.sh",
-    "test": "node --test"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "axios": "^1.7.2",

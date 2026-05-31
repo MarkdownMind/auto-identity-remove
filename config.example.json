@@ -1,11 +1,13 @@
 {
   "_comment": "Copy this file to config.json and fill in your details. Run `node setup.js` to be guided interactively.",
-
   "person": {
     "firstName": "Jane",
     "lastName": "Doe",
     "fullName": "Jane Doe",
-    "aliases": ["Jan Doe", "Jane M Doe"],
+    "aliases": [
+      "Jan Doe",
+      "Jane M Doe"
+    ],
     "city": "Austin",
     "country": "US",
     "_country_note": "2-letter country code. US (default), CA, GB, AU, etc. Non-US users: 'state' holds province/region; 'zip' holds postal code (any format, e.g. K1A 0A6 or SW1A 1AA); 'phoneFormatted' is the raw phone number with no US formatting.",
@@ -18,28 +20,33 @@
     "phoneFormatted": "(512) 555-0000",
     "_phone_note": "For non-US: phoneFormatted equals phone with no reformatting applied"
   },
-
   "capsolver": {
-    "_comment": "Sign up free at capsolver.com — pay-as-you-go, costs pennies/month for this use case",
+    "_comment": "Sign up free at capsolver.com \u2014 pay-as-you-go, costs pennies/month for this use case",
     "apiKey": "CAP-YOUR_KEY_HERE"
   },
-
   "accounts": {
-    "_comment": "For sites that require a login. Leave password blank — setup.js will prompt you to create the account once, then store credentials here.",
-    "spokeo":       { "email": "", "password": "" },
-    "beenverified": { "email": "", "password": "" },
-    "mylife":       { "email": "", "password": "" }
+    "_comment": "For sites that require a login. Leave password blank \u2014 setup.js will prompt you to create the account once, then store credentials here.",
+    "spokeo": {
+      "email": "",
+      "password": ""
+    },
+    "beenverified": {
+      "email": "",
+      "password": ""
+    },
+    "mylife": {
+      "email": "",
+      "password": ""
+    }
   },
-
   "notify": {
     "_comment": "iMessage number to text results to (macOS only). Leave blank to disable.",
     "textTo": "+15125550000",
     "_webhook_comment": "Optional webhook URL for notifications on any OS (ntfy.sh, Slack, Discord). Leave blank to disable.",
     "webhook": ""
   },
-
   "email": {
-    "_comment": "SMTP config for sending opt-out emails. Required — without this, email brokers are logged as 'manual'. Gmail: host=smtp.gmail.com, port=587, use an App Password (myaccount.google.com/apppasswords). Outlook/Office365: host=smtp-mail.outlook.com, port=587.",
+    "_comment": "SMTP config for sending opt-out emails. Required \u2014 without this, email brokers are logged as 'manual'. Gmail: host=smtp.gmail.com, port=587, use an App Password (myaccount.google.com/apppasswords). Outlook/Office365: host=smtp-mail.outlook.com, port=587.",
     "smtp": {
       "host": "smtp.gmail.com",
       "port": 587,
@@ -48,19 +55,43 @@
       "from": "you@gmail.com"
     }
   },
-
   "profileDir": "~/.config/auto-identity-remove",
-
   "browser": {
-    "_comment": "Browser engine for form automation. Options: chromium (default), stealth, chrome, camofox, cdp.",
-    "_chromium":  "Playwright Chromium + handrolled stealth. Default, works out of the box.",
-    "_stealth":   "playwright-extra + stealth plugin. Better JS-level fingerprint masking than chromium.",
-    "_chrome":    "Your real Google Chrome with your actual profile (existing cookies, logins). Chrome must be closed first.",
-    "_camofox":   "Camoufox Firefox fork — C++-level fingerprint spoofing. Best anti-detect. Requires: npm install camoufox-js playwright-core && npx camoufox-js fetch",
-    "_cdp":       "Attach to an already-running Chrome via Chrome DevTools Protocol (launch Chrome with --remote-debugging-port=9222).",
-    "engine": "chromium",
+    "_comment": "Browser engine config. camofox is first-class default (C++-level fingerprint spoofing).",
+    "engine": "camofox",
+    "_engine_comment": "Options: camofox (default), stealth, chrome, chromium, cdp",
+    "cookiesFile": "~/.camofox/cookies/cookies.txt",
+    "_cookiesFile_comment": "Netscape/cookies.txt export from your browser. Imported on every launch.",
+    "profileDir": "~/.camofox/profiles/auto-identity-remove",
+    "_profileDir_comment": "Where storageState (cookies+localStorage) is persisted across runs.",
+    "camoufoxBinary": "",
+    "_camoufoxBinary_comment": "Optional: path to custom Camoufox binary. Leave blank to use npx camoufox-js fetch version.",
+    "proxy": {
+      "_comment": "Optional proxy for camofox engine. Remove this block to disable.",
+      "server": "http://host:port",
+      "username": "",
+      "password": ""
+    },
+    "_proxy_comment": "Set proxy.server to route camofox through a proxy. Credentials are optional.",
+    "block_webrtc": true,
+    "_block_webrtc_comment": "Prevent WebRTC from leaking your real IP (default: true, highly recommended)",
+    "enable_cache": true,
+    "_enable_cache_comment": "Enable browser disk cache for faster repeated loads (default: true)",
+    "block_images": false,
+    "_block_images_comment": "Block image loading. Keep false \u2014 broker opt-out forms need images (default: false)",
+    "humanize": true,
+    "_humanize_comment": "Randomize mouse movements and timing to appear human (default: true)",
+    "geoip": true,
+    "_geoip_comment": "Auto-match browser locale and timezone to your IP geolocation (default: true)",
+    "tracing": false,
+    "_tracing_comment": "Record Playwright traces (screenshots+snapshots). Saved as .zip files.",
+    "tracingDir": "~/.camofox/traces",
+    "_tracingDir_comment": "Where to store trace .zip files. Old traces auto-pruned at 20 files.",
     "chromeDataDir": "~/Library/Application Support/Google/Chrome",
+    "_chromeDataDir_comment": "[chrome engine only] Your real Chrome user data dir.",
     "chromeBinary": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "cdpUrl": "http://localhost:9222"
+    "_chromeBinary_comment": "[chrome engine only] Path to Chrome binary.",
+    "cdpUrl": "http://localhost:9222",
+    "_cdpUrl_comment": "[cdp engine only] URL of running Chrome with --remote-debugging-port."
   }
 }
