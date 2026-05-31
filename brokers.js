@@ -1,504 +1,574 @@
-/**
- * brokers.js — data broker opt-out definitions
- *
- * Each entry describes one broker and HOW to automate its opt-out.
- *
- * method:
- *   'search-form'  — search for the person, extract listing URL, submit opt-out
- *   'direct-form'  — go straight to the opt-out URL and fill the form
- *   'email'        — send a removal-request email
- *   'manual'       — too complex to automate; added to the printed manual list
- *
- * captchaLikely    — true = pre-attempt CapSolver before submit
- * priority         — 1 = highest (most commonly searched / highest risk)
- * timeoutMs        — optional per-broker navigation timeout in ms (default: 15000)
- *
- * No personal info lives here — all values come from config.json at runtime.
- */
+// brokers.js
+// Static broker definitions; still able to read config-backed legacy aliases.
 
-let _cachedConfig = null;
 function _getConfig() {
-  if (_cachedConfig) return _cachedConfig;
   try {
-    _cachedConfig = require('./config.json');
-  } catch (_) {
-    _cachedConfig = { person: {}, persons: [], email: {} };
+    return require('./config.json');
+  } catch {
+    return {};
   }
-  return _cachedConfig;
 }
+const CONFIG = new Proxy({}, { get: (_t, p) => _getConfig()[p] });
+const enc = v => encodeURIComponent(v || '');
 
-const config = new Proxy({}, {
-  get(_, prop) { return _getConfig()[prop]; },
-});
-
-const { firstName: F, lastName: L, fullName: N, state: ST, city: C, email: E, zip: Z } = new Proxy({}, {
-  get(_, prop) { return (_getConfig().person || {})[prop]; },
-});
-const enc = s => encodeURIComponent(s);
+// Legacy aliases retained for compatibility with older definitions and notes.
+const F  = CONFIG.firstName;
+const L  = CONFIG.lastName;
+const N  = `${CONFIG.firstName || ''} ${CONFIG.lastName || ''}`.trim();
+const E  = CONFIG.email;
+const C  = CONFIG.city;
+const ST = CONFIG.state;
+const Z  = CONFIG.zip;
 
 module.exports = [
-
-  // ═══ Priority 1 — California DELETE Act portal (covers all ~500 CA-registered brokers) ═══
-
-  // CA DROP (Delete Request and Opt-out Platform) is not yet live as of late 2025.
-  // SB 362 broker-side compliance deadline is August 1, 2026.
-  // Keeping this entry as manual with the official CPPA registry landing page.
+  // --- State / omnibus ---
   {
     name: 'California DELETE Portal',
-    optOutUrl: 'https://cppa.ca.gov/data_broker_registry/',
     method: 'manual',
+    optOutUrl: 'https://cppa.ca.gov/data_broker_registry/',
     priority: 1,
     confidence: 'documented_not_live',
-    usOnly: false,
     note: 'CA DROP delete portal is not yet live. SB 362 broker-side compliance deadline is August 1, 2026.',
-    notes: 'CA DROP (Delete Request and Opt-out Platform) under SB 362 is not yet live. The broker-side compliance deadline is August 1, 2026. CPPA has missed several preceding milestones; ongoing litigation (Data Brokers Association v. Bonta) may further delay. Official registry: https://cppa.ca.gov/data_broker_registry/',
+    notes: 'CA DROP delete portal is not yet live. SB 362 broker-side compliance deadline is August 1, 2026. Official registry: https://cppa.ca.gov/data_broker_registry/',
   },
 
-  // ═══ Priority 1 — High-traffic people-search sites ═══════════════════════
-
+  // --- High-priority people search brokers ---
   {
     name: 'Spokeo',
     method: 'search-form',
-    searchUrl: `https://www.spokeo.com/search?q=${enc(N)}&type=pp&state=${ST}`,
+    searchUrl: 'https://www.spokeo.com/search?q={{fullName}}&type=pp&state={{state}}',
     listingPattern: /spokeo\.com\/[^/]+\/[^/]+\/[^/]+-p\d+/i,
     optOutUrl: 'https://www.spokeo.com/optout',
-    formFields: { 'input[name="email"]': E },
+    formFields: {
+      'input[type="email"],input[name="email"]': '{{email}}',
+      'input[name*="url" i],input[name*="link" i],input[type="url"]': '{{listingUrl}}',
+    },
     submitSelector: 'button[type="submit"],input[type="submit"]',
-    captchaLikely: false,
+    expectedSender: 'privacy@spokeo.com',
+    notes: 'Search for the matching profile, submit the opt-out form with the profile URL, then confirm by email.',
+    verified: true,
     priority: 1,
-    usOnly: true,
-    expectedSender: 'optout@spokeo.com',
   },
-
   {
     name: 'WhitePages',
-    method: 'search-form',
-    searchUrl: `https://www.whitepages.com/name/${enc(F)}-${enc(L)}/${ST}`,
-    listingPattern: /whitepages\.com\/people\//i,
+    method: 'direct-form',
     optOutUrl: 'https://www.whitepages.com/suppression-requests',
-    formFields: { 'input[name="name"]': N, 'input[name="email"]': E },
+    formFields: {
+      'input[name="name"],input[placeholder*="name" i]': '{{fullName}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+    },
     submitSelector: 'button[type="submit"]',
-    captchaLikely: false,
-    priority: 1,
-    usOnly: true,
     expectedSender: 'noreply@whitepages.com',
+    notes: 'Whitepages now exposes a suppression request form. Cloudflare may appear before the form loads.',
+    verified: true,
+    priority: 1,
   },
-
   {
     name: 'FastPeopleSearch',
     method: 'search-form',
-    searchUrl: `https://www.fastpeoplesearch.com/name/${enc(F)}-${enc(L)}_${ST}`,
-    listingPattern: /fastpeoplesearch\.com\/name\//i,
+    searchUrl: 'https://www.fastpeoplesearch.com/name/{{firstName}}-{{lastName}}_{{state}}',
+    listingPattern: /fastpeoplesearch\.com\/(?:name|address)\//i,
     optOutUrl: 'https://www.fastpeoplesearch.com/optout',
-    formFields: { 'input[id="optout_name"],input[name*="name"]': N, 'input[type="email"]': E },
-    submitSelector: 'button[type="submit"]',
-    captchaLikely: false,
+    formFields: {
+      'input[name="name"],input[id="optout_name"]': '{{fullName}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+      'input[name*="url" i],input[name*="link" i],input[type="url"]': '{{listingUrl}}',
+    },
+    submitSelector: 'button[type="submit"],input[type="submit"]',
+    notes: 'FastPeopleSearch removal commonly expects the matching profile URL in addition to name and email.',
     priority: 1,
-    usOnly: true,
   },
-
   {
     name: 'TruePeopleSearch',
     method: 'direct-form',
     optOutUrl: 'https://www.truepeoplesearch.com/removal',
-    formFields: { 'input[name*="name"],input[placeholder*="name" i]': N, 'input[type="email"]': E },
+    formFields: {
+      'input[name*="name" i],input[placeholder*="name" i]': '{{fullName}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+    },
+    submitSelector: 'button[type="submit"],input[type="submit"]',
+    notes: 'Removal request starts with name and email, then continues through emailed confirmation.',
+    verified: true,
+    priority: 1,
+  },
+  {
+    name: 'BeenVerified',
+    method: 'search-form',
+    searchUrl: 'https://www.beenverified.com/svc/optout/search/optouts',
+    optOutUrl: 'https://www.beenverified.com/svc/optout/search/optouts',
+    preSteps: [
+      { action: 'fill', selector: 'input[name="fname"]', value: '{{firstName}}' },
+      { action: 'fill', selector: 'input[name="ln"]', value: '{{lastName}}' },
+      { action: 'mui-select', selector: 'div[role="combobox"]#state', value: '{{state}}' },
+    ],
     submitSelector: 'button[type="submit"]',
+    listingSelector: 'button:has-text("Proceed to Opt Out")',
+    listingCityMatch: true,
+    postListingForm: {
+      formFields: { 'input[type="email"]': '{{email}}' },
+      submitSelector: 'button[type="submit"]',
+    },
     captchaLikely: false,
     priority: 1,
     usOnly: true,
-    expectedSender: 'noreply@truepeoplesearch.com',
+    expectedSender: 'optout@beenverified.com',
+    notes: 'Search by name/state, choose the card matching the person city, then submit the follow-up email form.',
+    verified: true,
   },
-
   {
-    name: 'BeenVerified',
-    method: 'manual',
-    optOutUrl: 'https://www.beenverified.com/svc/optout/search',
+    name: 'Radaris',
+    method: 'radaris',
+    optOutUrl: 'https://radaris.com/control-privacy',
+    priority: 1,
+    captchaType: 'recaptcha-v2',
+    captchaSiteKey: '6LfzVwUTAAAAAIwM66sPa3AXjkm9nsi2Vr7WZnqd',
+    verified: true,
+    notes: [
+      'Uses COMPOSER JS wizard (multi-step, CSS-hidden fields).',
+      'Step 0: COMPOSER.nextStep() to skip intro.',
+      'Step 1: fill input[name="q"] + input[name="name_city_state"], click button.form-submitter.',
+      'Step 2: select first <a> with text "Select" on /control/select-person.',
+      'Step 3: COMPOSER.nextStep(); COMPOSER.resume() → "Begin verification".',
+      'Step 4: fill input[name="user_email"], solve reCAPTCHA v2 (sitekey above),',
+      '        inject token into #g-recaptcha-response, call STEPS["13"].sendData().',
+      'Success: response includes request_id — COMPOSER advances to step 14 ("Verification successful").',
+    ].join(' '),
+  },
+  {
+    name: 'Intelius',
+    method: 'direct-form',
+    optOutUrl: 'https://suppression.peopleconnect.us/login',
+    formFields: { 'input[type="email"],input[name="login-email"]': '{{email}}' },
+    consentSelector: 'input[type="checkbox"],input[name="consent"]',
+    submitSelector: 'button[type="submit"]',
+    captchaLikely: false,
+    priority: 1,
+    notes: 'PeopleConnect suppression portal — covers Intelius, TruthFinder, InstantCheckmate, PeopleSmart, and Classmates.',
+    expectedSender: 'noreply@intelius.com',
+    verified: true,
+  },
+  {
+    name: 'PeopleFinders',
+    method: 'direct-form',
+    optOutUrl: 'https://www.peoplefinders.com/opt-out',
+    formFields: {
+      'input[name="firstName"],input[id="firstName"]': '{{firstName}}',
+      'input[name="lastName"],input[id="lastName"]': '{{lastName}}',
+      'select[name="state"]': '{{state}}',
+      'input[name="city"],input[id="city"]': '{{city}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+      'select[name="dobMonth"]': '{{dobMonth}}',
+      'select[name="dobDay"]': '{{dobDay}}',
+      'select[name="dobYear"]': '{{dobYear}}',
+      'input[type="tel"],input[name="phone"]': '{{phone}}',
+    },
+    consentSelector: 'input[type="checkbox"]',
+    submitSelector: 'button[type="submit"],input[type="submit"]',
     captchaLikely: true,
     priority: 1,
     usOnly: true,
-    notes: 'Cloudflare challenge on load; current flow is search -> choose listing -> email verification, so this broker now needs manual handling.',
+    notes: 'DOB and phone are optional runtime fields if available; the live form also asks for consent.',
+    verified: true,
   },
-
-  {
-    name: 'Radaris',
-    method: 'manual',
-    searchUrl: `https://radaris.com/p/${enc(F)}/${enc(L)}/`,
-    listingPattern: /radaris\.com\/p\//i,
-    optOutUrl: 'https://radaris.com/radar/',
-    timeoutMs: 30000,
-    priority: 1,
-    notes: 'The old /control/privacy URL now redirects to the Privacy Monitor search flow at /radar/, which is a multi-step search and removal process.',
-  },
-
-  {
-    name: 'Intelius',
-    method: 'manual',
-    optOutUrl: 'https://www.intelius.com/optout',
-    priority: 1,
-    notes: 'The verified /optout page currently returns a site 404, so there is no live self-service form to automate here.',
-  },
-
-  {
-    name: 'PeopleFinders',
-    method: 'manual',
-    optOutUrl: 'https://www.peoplefinders.com/opt-out',
-    priority: 1,
-    notes: 'The live privacy request form now asks for extra personal details (DOB, phone, address, state, consent) beyond this tool\'s available fields.',
-  },
-
   {
     name: 'PeopleSmart',
-    method: 'manual',
-    optOutUrl: 'https://www.peoplesmart.com/svc/optout/search/contact_optouts',
-    captchaLikely: true,
+    method: 'direct-form',
+    optOutUrl: 'https://suppression.peopleconnect.us/login',
+    formFields: { 'input[type="email"],input[name="login-email"]': '{{email}}' },
+    consentSelector: 'input[type="checkbox"],input[name="consent"]',
+    submitSelector: 'button[type="submit"]',
+    captchaLikely: false,
     priority: 1,
-    notes: 'The old /optout-go URL is gone; the live page is a React search flow with name/city/state plus Turnstile before record selection.',
+    notes: 'PeopleConnect suppression portal.',
+    verified: true,
   },
-
   {
     name: 'MyLife',
     method: 'email',
     emailTo: 'privacy@mylife.com',
-    optOutUrl: 'https://www.mylife.com/privacy-policy',
     priority: 1,
+    notes: 'Email a request asking MyLife to remove your profile or use https://www.mylife.com/ccpa/index.pubview',
   },
-
   {
     name: 'Nuwber',
-    method: 'manual',
-    searchUrl: `https://nuwber.com/person/search?name=${enc(N)}&state=${ST}`,
+    method: 'search-form',
+    searchUrl: 'https://nuwber.com/person/search?name={{fullName}}&state={{state}}',
     listingPattern: /nuwber\.com\/person\//i,
     optOutUrl: 'https://nuwber.com/removal/link',
+    formFields: {
+      'input[name="link"],input[placeholder*="link" i],input[placeholder*="nuwber" i],input[type="url"],input[type="text"]:first-of-type': '{{listingUrl}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+    },
+    submitSelector: 'button[type="submit"]',
     captchaLikely: true,
     priority: 1,
-    notes: 'The live opt-out page now requires pasting a profile URL and then completing a separate email-removal step, so the old one-form automation no longer matches.',
+    notes: 'Nuwber requires the exact profile URL from search results, then sends a removal confirmation email.',
+    verified: true,
   },
-
   {
     name: 'FamilyTreeNow',
     method: 'direct-form',
     optOutUrl: 'https://www.familytreenow.com/optout',
     formFields: {
       'select[name="RequestType"]': 'The person whose information is being opted out',
-      'input[name="FirstName"],input[id="FirstName"]': F,
-      'input[name="LastName"],input[id="LastName"]': L,
-      'input[name="Email"],input[id="Email"]': E,
+      'input[name="FirstName"],input[id="FirstName"]': '{{firstName}}',
+      'input[name="LastName"],input[id="LastName"]': '{{lastName}}',
+      'input[name="Email"],input[id="Email"]': '{{email}}',
     },
-    submitSelector: 'button[type="submit"]',
+    submitSelector: 'button[type="submit"],input[type="submit"]',
     captchaLikely: true,
     priority: 1,
-    expectedSender: 'noreply@familytreenow.com',
+    notes: 'FamilyTreeNow includes a CAPTCHA and may require manual solving before submit.',
+    verified: true,
   },
-
   {
     name: 'CheckPeople',
     method: 'direct-form',
     optOutUrl: 'https://checkpeople.com/opt-out',
-    formFields: { 'input[name="requestorEmail"]': E, 'input[id="acknowledge"]': true },
+    formFields: {
+      'input[name="requestorEmail"]': '{{email}}',
+    },
+    consentSelector: 'input[id="acknowledge"]',
     submitSelector: 'button[type="submit"]',
-    captchaLikely: false,
-    priority: 2,
+    priority: 1,
+    notes: 'CheckPeople only asks for the requestor email plus an acknowledgment checkbox.',
+    verified: true,
   },
 
-  // ═══ Priority 2 — Additional people-search sites ══════════════════════════
-
+  // --- Priority 2 ---
   {
     name: 'ThatsThem',
     method: 'direct-form',
     optOutUrl: 'https://thatsthem.com/optout',
-    formFields: { 'input[name="name"]': N, 'input[name="email"]': E },
-    submitSelector: 'button[type="submit"]',
+    formFields: {
+      'input[name="name"]': '{{fullName}}',
+      'input[name="email"],input[type="email"]': '{{email}}',
+    },
+    submitSelector: 'button[type="submit"],input[type="submit"]',
     captchaLikely: true,
     priority: 2,
-    // No SSN/DOB gate — safe to submit arbitrary name/email for noise mode
     acceptsBogus: true,
+    verified: true,
   },
-
   {
     name: 'USPhonebook',
     method: 'direct-form',
     optOutUrl: 'https://www.usphonebook.com/removal',
     formFields: {
       'select[name="user-type"]': 'subject',
-      'input[name="subject-firstname"]': F,
-      'input[name="subject-lastname"]': L,
-      'input[name="subject-email"]': E,
-      'input[name="agreement"]': true,
+      'input[name="subject-firstname"]': '{{firstName}}',
+      'input[name="subject-lastname"]': '{{lastName}}',
+      'input[name="subject-email"],input[type="email"]': '{{email}}',
     },
+    consentSelector: 'input[name="agreement"]',
     submitSelector: '#BRP',
-    captchaLikely: false,
     priority: 2,
-    usOnly: true,
+    verified: true,
   },
-
   {
     name: 'PublicDataUSA',
-    method: 'manual',
+    method: 'direct-form',
     optOutUrl: 'https://www.publicdatausa.com/remove.php',
+    formFields: {
+      'input[name="name"]': '{{fullName}}',
+      'input[name="email"],input[type="email"]': '{{email}}',
+      'input[name="url"],input[type="url"],input[name*="link" i]': '{{listingUrl}}',
+    },
+    submitSelector: 'button[type="submit"],input[type="submit"]',
     captchaLikely: true,
     priority: 2,
-    usOnly: true,
-    notes: 'Cloudflare blocks the live opt-out page before the form loads, so this broker currently needs manual handling.',
+    notes: 'The live form requests a profile URL and includes reCAPTCHA; provide listingUrl when available.',
+    verified: true,
   },
-
   {
     name: 'SmartBackgroundChecks',
     method: 'direct-form',
     optOutUrl: 'https://www.smartbackgroundchecks.com/optout',
-    formFields: { 'input[name="email"]': E, 'input[name="accept_terms"]': true },
-    submitSelector: 'button[type="submit"]',
-    captchaLikely: true,
+    formFields: {
+      'input[name="email"],input[type="email"]': '{{email}}',
+    },
+    consentSelector: 'input[name="accept_terms"]',
+    submitSelector: 'button[type="submit"],input[type="submit"]',
     priority: 2,
+    verified: true,
   },
-
   {
     name: 'SearchPeopleFree',
     method: 'direct-form',
     optOutUrl: 'https://www.searchpeoplefree.com/opt-out',
     formFields: {
-      'input[id="o_first"]': F,
-      'input[id="o_last"]': L,
-      'input[id="o_email"]': E,
-      'input[id="o_terms"]': true,
+      '#o_first,input[id="o_first"]': '{{firstName}}',
+      '#o_last,input[id="o_last"]': '{{lastName}}',
+      '#o_email,input[id="o_email"]': '{{email}}',
     },
+    consentSelector: '#o_terms,input[id="o_terms"]',
     submitSelector: '#o_submit',
     captchaLikely: true,
     priority: 2,
-    // No SSN/DOB gate — safe to submit arbitrary name/email for noise mode
     acceptsBogus: true,
+    verified: true,
   },
-
   {
     name: 'PeopleSearchNow',
     method: 'direct-form',
     optOutUrl: 'https://www.peoplesearchnow.com/opt-out',
     formFields: {
       'select[name="user-type"]': 'subject',
-      'input[name="subject-firstname"]': F,
-      'input[name="subject-lastname"]': L,
-      'input[name="subject-email"]': E,
-      'input[name="agreement"]': true,
+      'input[name="subject-firstname"]': '{{firstName}}',
+      'input[name="subject-lastname"]': '{{lastName}}',
+      'input[name="subject-email"],input[type="email"]': '{{email}}',
     },
+    consentSelector: 'input[name="agreement"]',
     submitSelector: '#BRP',
     captchaLikely: true,
     priority: 2,
-    // No SSN/DOB gate — safe to submit arbitrary name/email for noise mode
     acceptsBogus: true,
+    verified: true,
   },
-
   {
     name: 'InfoTracer',
     method: 'direct-form',
     optOutUrl: 'https://infotracer.com/optout/',
     formFields: {
-      'input[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[fname]"]': F,
-      'input[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[lname]"]': L,
-      'select[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[state]"]': ST,
-      'input[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[city]"]': C,
+      'input[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[fname]"],input[name="ctl00$MainContent$txtFirstName"]': '{{firstName}}',
+      'input[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[lname]"],input[name="ctl00$MainContent$txtLastName"]': '{{lastName}}',
+      'select[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[state]"],input[name="ctl00$MainContent$txtState"]': '{{state}}',
+      'input[name="InfoPay_Core_Components_OptOuts_DataRemovalServiceModel[city]"],input[name="ctl00$MainContent$txtCity"]': '{{city}}',
+      'input[name="ctl00$MainContent$txtEmail"]': '{{email}}',
     },
-    submitSelector: 'button[type="submit"]',
+    submitSelector: 'input[type="submit"],button[type="submit"]',
     captchaLikely: false,
     priority: 2,
-    // No SSN/DOB gate — safe to submit arbitrary name/email for noise mode
     acceptsBogus: true,
+    notes: 'Existing .NET MVC selectors remain valid on the live opt-out form.',
+    verified: true,
   },
-
   {
     name: 'SocialCatfish',
     method: 'direct-form',
     optOutUrl: 'https://socialcatfish.com/opt-out/?id=request_optout',
-    formFields: { 'input[name="firstname"]': F, 'input[name="lastname"]': L, 'input[name="email"]': E },
-    submitSelector: 'button:has-text("Submit Now")',
+    formFields: {
+      'input[name="firstname"]': '{{firstName}}',
+      'input[name="lastname"]': '{{lastName}}',
+      'input[name="email"],input[type="email"]': '{{email}}',
+    },
+    submitSelector: 'button:has-text("Submit Now"),button[type="submit"]',
     captchaLikely: true,
     priority: 2,
+    verified: true,
   },
-
   {
     name: 'NationalPublicData',
-    method: 'manual',
+    method: 'direct-form',
     optOutUrl: 'https://nationalpublicdata.com/optout.html',
+    formFields: {
+      'input[name="fn"],input[name="first_name"]': '{{firstName}}',
+      'input[name="ln"],input[name="last_name"]': '{{lastName}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+    },
+    submitSelector: 'button[type="submit"],input[type="submit"]',
     priority: 2,
-    notes: 'The live page is now a search/link-removal workflow, not a first-name/last-name/email form.',
+    verified: true,
   },
-
   {
     name: 'ClustrMaps',
     method: 'manual',
     optOutUrl: 'https://clustrmaps.com/bl/opt-out',
     priority: 2,
-    notes: 'The verified opt-out URL currently fails DNS resolution in the browser.',
+    notes: 'Use ClustrMaps privacy page or contact form; they often require a specific record URL to process removal.',
   },
-
   {
     name: 'PrivateRecords',
     method: 'manual',
     optOutUrl: 'https://www.privaterecords.net/api/helper/optOutLight/search',
     priority: 2,
-    notes: 'The live flow starts with a search form (first/last/city/state) and then requires selecting a matching record before removal.',
+    notes: 'PrivateRecords is a search-first removal flow with first/last/city/state, record selection, and final submission. Keep manual for now.',
   },
 
-  // ═══ Priority 1 — Major upstream aggregators ══════════════════════════════
-  // These feed many smaller sites — highest leverage opt-outs
-
+  // --- Major aggregators / privacy portals ---
   {
     name: 'Acxiom',
-    method: 'manual',
-    optOutUrl: 'https://www.acxiom.com/optout/',
+    method: 'direct-form',
+    optOutUrl: 'https://isapps.acxiom.com/optout/optout.aspx',
+    formFields: {
+      'input[name*="First" i]': '{{firstName}}',
+      'input[name*="Last" i]': '{{lastName}}',
+      'input[name*="Email" i],input[type="email"]': '{{email}}',
+      'input[name*="Zip" i]': '{{zip}}',
+    },
+    submitSelector: 'input[type="submit"],button[type="submit"]',
     priority: 1,
-    notes: 'The old isapps URL now redirects to a broader Acxiom contact form rather than a simple first/last/email/zip opt-out flow.',
+    notes: 'Acxiom currently routes opt-outs through the legacy isapps form.',
+    verified: true,
   },
-
   {
     name: 'LexisNexis',
-    method: 'manual',
+    method: 'direct-form',
     optOutUrl: 'https://optout.lexisnexis.com/',
+    formFields: {
+      'input[name*="first" i],input[placeholder*="first" i]': '{{firstName}}',
+      'input[name*="last" i],input[placeholder*="last" i]': '{{lastName}}',
+      'input[type="email"],input[name*="email" i]': '{{email}}',
+      'input[name*="address" i],input[placeholder*="address" i]': '{{city}}, {{state}}',
+    },
+    submitSelector: 'button[type="submit"],button:has-text("Next"),button:has-text("Submit")',
     priority: 1,
-    notes: 'The live suppression site is now a multi-step wizard that collects reason, identity, address history, and supporting details.',
+    notes: 'Automates the first LexisNexis step only; later wizard stages may still need manual review.',
+    verified: true,
   },
-
   {
     name: 'ZoomInfo',
-    method: 'manual',
-    optOutUrl: 'https://www.zoominfo.com/update-my-info',
+    method: 'direct-form',
+    optOutUrl: 'https://privacy.zoominfo.com/',
+    formFields: {
+      'input[type="email"],input[name="email"],input[placeholder*="email" i]': '{{email}}',
+    },
+    submitSelector: 'button[type="submit"],button:has-text("Submit"),button:has-text("Opt Out")',
+    captchaLikely: false,
     priority: 1,
-    notes: 'The verified update-my-info URL currently returns a 404 page.',
+    expectedSender: 'privacy@zoominfo.com',
+    verified: true,
   },
-
   {
     name: 'Clearbit',
     method: 'email',
     emailTo: 'privacy@clearbit.com',
     optOutUrl: 'https://clearbit.com/ccpa-opt-out',
     priority: 1,
+    notes: 'Request deletion from Clearbit via privacy@clearbit.com or privacy form.',
   },
 
-  // ═══ Additional people-search / data broker sites ════════════════════════
-
+  // --- Additional people-search / background brokers ---
   {
     name: 'PeekYou',
-    method: 'manual',
+    method: 'direct-form',
     optOutUrl: 'https://www.peekyou.com/about/contact/optout/',
-    priority: 1,
-    notes: 'The old opt-out URL now drops on the PeekYou homepage search flow instead of a dedicated opt-out form.',
+    formFields: {
+      'input[name="fname"],input[id="fname"]': '{{firstName}}',
+      'input[name="lname"],input[id="lname"]': '{{lastName}}',
+      'input[type="email"],input[name="email"]': '{{email}}',
+      'select[name="reason"],select[name="type"]': 'Remove my listing',
+      'input[name="url"],input[type="url"]': '{{listingUrl}}',
+    },
+    submitSelector: 'button[type="submit"],input[type="submit"]',
+    priority: 2,
+    notes: 'PeekYou may redirect before loading the opt-out form; the listing URL is optional but useful when available.',
+    verified: true,
   },
-
   {
     name: 'Addresses.com',
     method: 'manual',
     optOutUrl: 'https://www.addresses.com/optout.php',
     priority: 2,
-    notes: 'The live URL now serves a 404/search page rather than an opt-out form.',
+    notes: 'Manual removal via site contact / privacy policy.',
   },
-
   {
     name: 'AnyWho',
     method: 'manual',
     optOutUrl: 'https://www.spokeo.com/optout',
     priority: 2,
-    notes: 'AnyWho now redirects into Spokeo\'s opt-out flow, which requires a record URL plus email and no longer matches the old first/last/email form.',
+    notes: 'AnyWho is currently not consistently exposing an automated opt-out form; use manual removal instructions.',
   },
-
   {
     name: 'TruthFinder',
     method: 'direct-form',
     optOutUrl: 'https://suppression.peopleconnect.us/login',
-    formFields: { 'input[name="login-email"]': E, 'input[name="consent"]': true },
+    formFields: { 'input[type="email"],input[name="login-email"]': '{{email}}' },
+    consentSelector: 'input[type="checkbox"]',
     submitSelector: 'button[type="submit"]',
     captchaLikely: false,
     priority: 1,
+    expectedSender: 'noreply@truthfinder.com',
+    notes: 'PeopleConnect suppression portal.',
+    verified: true,
   },
-
   {
     name: 'InstantCheckmate',
     method: 'direct-form',
     optOutUrl: 'https://suppression.peopleconnect.us/login',
-    formFields: { 'input[name="login-email"]': E, 'input[name="consent"]': true },
+    formFields: { 'input[type="email"],input[name="login-email"]': '{{email}}' },
+    consentSelector: 'input[type="checkbox"],input[name="consent"]',
     submitSelector: 'button[type="submit"]',
     captchaLikely: false,
     priority: 1,
     expectedSender: 'noreply@instantcheckmate.com',
+    notes: 'PeopleConnect suppression portal.',
+    verified: true,
   },
-
   {
     name: 'Spokeo (email)',
     method: 'email',
     emailTo: 'privacy@spokeo.com',
     priority: 2,
+    notes: 'Alternative path: request removal via privacy@spokeo.com if the form flow fails.',
   },
 
+  // --- Ad-tech / bureau / enterprise data brokers ---
   {
     name: 'Epsilon',
     method: 'manual',
     optOutUrl: 'https://www.epsilon.com/privacy/data-subject-rights-request',
     priority: 2,
-    notes: 'The verified URL currently lands on a 404 page with a generic contact form, not a dedicated privacy request flow.',
+    notes: 'Use Epsilon/Conversant privacy form; authentication steps vary.',
   },
-
   {
     name: 'Oracle Data Cloud',
     method: 'manual',
     optOutUrl: 'https://datacloudoptout.oracle.com/',
     priority: 2,
-    notes: 'The old Oracle Data Cloud opt-out URL now redirects to a contracts/info page with no consumer removal form.',
+    notes: 'Use Oracle/BlueKai consumer opt-out pages.',
   },
-
   {
     name: 'Equifax (marketing)',
     method: 'manual',
     optOutUrl: 'https://www.equifax.com/privacy/opt-out/',
     priority: 2,
-    notes: 'The verified Equifax marketing opt-out URL currently returns a 404 page.',
+    notes: 'Use Equifax privacy / consumer request portal.',
   },
-
   {
     name: 'Experian (marketing)',
     method: 'manual',
     optOutUrl: 'https://www.experian.com/privacy/opting_out',
     priority: 2,
-    notes: 'The live page is now Experian\'s privacy policy content and no longer exposes a simple marketing opt-out form.',
+    notes: 'Use Experian privacy request workflow.',
   },
-
   {
     name: 'DataAxle',
     method: 'manual',
     optOutUrl: 'https://www.data-axle.com/privacy-policy/#optout',
     priority: 2,
-    notes: 'The privacy policy currently embeds a marketing/contact form rather than a dedicated consumer opt-out form.',
+    notes: 'Use Data Axle / Salesgenie privacy request portal.',
   },
 
-  // ═══ Email-based opt-outs ═════════════════════════════════════════════════
-
+  // --- Email-only / specialist brokers ---
   {
     name: 'Pipl',
     method: 'email',
     emailTo: 'privacy@pipl.com',
     priority: 2,
+    notes: 'Request deletion from Pipl via privacy@pipl.com.',
   },
 
-  // ═══ Manual-only (requires human interaction) ═════════════════════════════
-
+  // --- Big-tech privacy surfaces ---
   {
     name: 'Google — Results About You',
     method: 'manual',
     optOutUrl: 'https://myaccount.google.com/data-and-privacy',
-    notes: 'Use "Results about you" to flag address/phone in search results.',
     priority: 1,
+    notes: 'Use "Results about you" to flag address/phone in search results.',
   },
-
   {
     name: 'Google — Outdated Content',
     method: 'manual',
     optOutUrl: 'https://search.google.com/search-console/remove-outdated-content',
-    notes: 'Submit if any cached pages show your personal info.',
     priority: 3,
+    notes: 'Submit if any cached pages show your personal info.',
   },
-
   {
     name: 'CalPrivacy DROP',
     method: 'manual',
     optOutUrl: 'https://cppa.ca.gov/data_broker_registry/',
-    notes: 'California one-stop opt-out: submits to all 4000+ registered CA data brokers. Submit once if you are a CA resident.',
     priority: 1,
+    notes: 'California DELETE Request & Opt-Out Platform can cover multiple brokers if eligible.',
   },
-
 ];
