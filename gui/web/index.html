@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>auto-identity-remove GUI</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AIR</div>
+          <div>
+            <h1>auto-identity-remove</h1>
+            <p>Local watcher control panel</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-link active" data-section="dashboard">Dashboard</button>
+          <button class="nav-link" data-section="person">Person Info</button>
+          <button class="nav-link" data-section="settings">Settings</button>
+          <button class="nav-link" data-section="history">History</button>
+        </nav>
+
+        <div class="status-card">
+          <span class="status-label">Watcher</span>
+          <strong id="run-status-pill" class="pill pill-stopped">Stopped</strong>
+          <p id="run-status-detail">Ready to start watcher.js</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <h2 id="section-title">Dashboard</h2>
+            <p class="muted">Manage <code>node watcher.js</code> from a single local binary.</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="refresh-all" class="button button-secondary">Refresh</button>
+            <button id="start-run" class="button button-primary">Start watcher</button>
+            <button id="stop-run" class="button button-danger">Stop watcher</button>
+          </div>
+        </header>
+
+        <section id="dashboard" class="section active">
+          <div class="stats-grid">
+            <article class="stat-card">
+              <span>Total brokers</span>
+              <strong id="stat-total">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>Successful</span>
+              <strong id="stat-success">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>Needs attention</span>
+              <strong id="stat-error">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>Pending / manual</span>
+              <strong id="stat-pending">0</strong>
+            </article>
+          </div>
+
+          <div class="panel two-column-grid">
+            <section class="card">
+              <div class="card-header">
+                <h3>Live log stream</h3>
+                <button id="clear-log" class="button button-ghost">Clear</button>
+              </div>
+              <pre id="log-stream" class="log-stream"></pre>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h3>Recent screenshots</h3>
+                <button id="refresh-screenshots" class="button button-ghost">Refresh</button>
+              </div>
+              <div id="screenshots-grid" class="screenshots-grid empty-state">No screenshots found yet.</div>
+            </section>
+          </div>
+
+          <section class="card broker-card">
+            <div class="card-header">
+              <h3>Broker status grid</h3>
+              <p class="muted">Latest known result per broker.</p>
+            </div>
+            <div id="broker-grid" class="broker-grid"></div>
+          </section>
+        </section>
+
+        <section id="person" class="section">
+          <form id="person-form" class="card form-card">
+            <div class="card-header"><h3>Person information</h3></div>
+            <div class="form-grid">
+              <label><span>First name</span><input name="firstName" /></label>
+              <label><span>Last name</span><input name="lastName" /></label>
+              <label><span>City</span><input name="city" /></label>
+              <label><span>State</span><input name="state" /></label>
+              <label><span>ZIP</span><input name="zip" /></label>
+              <label><span>Email</span><input name="email" type="email" /></label>
+              <label><span>Phone</span><input name="phone" /></label>
+              <label class="full-width"><span>Aliases (comma or newline separated)</span><textarea name="aliases" rows="4"></textarea></label>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="button button-primary">Save person info</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="settings" class="section">
+          <form id="settings-form" class="card form-card">
+            <div class="card-header"><h3>Watcher settings</h3></div>
+            <div class="form-grid">
+              <label>
+                <span>Browser engine</span>
+                <select name="browserEngine">
+                  <option value="camofox">camofox</option>
+                  <option value="stealth">stealth</option>
+                  <option value="chrome">chrome</option>
+                  <option value="chromium">chromium</option>
+                  <option value="cdp">cdp</option>
+                </select>
+              </label>
+              <label class="toggle-row">
+                <span>Headed browser</span>
+                <input name="headed" type="checkbox" />
+              </label>
+              <label><span>Proxy server</span><input name="proxyServer" placeholder="http://host:port" /></label>
+              <label><span>Proxy username</span><input name="proxyUsername" /></label>
+              <label><span>Proxy password</span><input name="proxyPassword" type="password" /></label>
+              <label><span>CapSolver API key</span><input name="capsolverApiKey" type="password" /></label>
+              <label><span>Notification webhook</span><input name="notificationWebhook" /></label>
+              <label><span>Notification SMS / iMessage</span><input name="notificationSms" /></label>
+              <label class="full-width"><span>Profile directory</span><input name="profileDir" /></label>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="button button-primary">Save settings</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="history" class="section">
+          <div class="card history-card">
+            <div class="card-header">
+              <h3>state.json history</h3>
+              <p class="muted">Last success, last attempt, and current error streak.</p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Broker</th>
+                    <th>Last result</th>
+                    <th>Last success</th>
+                    <th>Last attempt</th>
+                    <th>Consecutive errors</th>
+                  </tr>
+                </thead>
+                <tbody id="history-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
