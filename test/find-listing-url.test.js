@@ -61,13 +61,13 @@ test('returns null when page has no links', async () => {
   assert.equal(result, null);
 });
 
-test('uses networkidle waitUntil (not domcontentloaded)', async () => {
+test('uses domcontentloaded waitUntil (faster on CF-protected sites)', async () => {
   const page = makePage([]);
   await findListingUrl(page, BROKER);
   assert.equal(
     page._captured.opts?.waitUntil,
-    'networkidle',
-    `expected waitUntil:'networkidle', got: ${page._captured.opts?.waitUntil}`
+    'domcontentloaded',
+    `expected waitUntil:'domcontentloaded', got: ${page._captured.opts?.waitUntil}`
   );
 });
 
