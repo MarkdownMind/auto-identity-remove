@@ -49,5 +49,18 @@
     }
   },
 
-  "profileDir": "~/.config/auto-identity-remove"
+  "profileDir": "~/.config/auto-identity-remove",
+
+  "browser": {
+    "_comment": "Browser engine for form automation. Options: chromium (default), stealth, chrome, camofox, cdp.",
+    "_chromium":  "Playwright Chromium + handrolled stealth. Default, works out of the box.",
+    "_stealth":   "playwright-extra + stealth plugin. Better JS-level fingerprint masking than chromium.",
+    "_chrome":    "Your real Google Chrome with your actual profile (existing cookies, logins). Chrome must be closed first.",
+    "_camofox":   "Camoufox Firefox fork — C++-level fingerprint spoofing. Best anti-detect. Requires: npm install camoufox-js playwright-core && npx camoufox-js fetch",
+    "_cdp":       "Attach to an already-running Chrome via Chrome DevTools Protocol (launch Chrome with --remote-debugging-port=9222).",
+    "engine": "chromium",
+    "chromeDataDir": "~/Library/Application Support/Google/Chrome",
+    "chromeBinary": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "cdpUrl": "http://localhost:9222"
+  }
 }

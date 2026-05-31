@@ -22,6 +22,7 @@ const { applyFilter, loadLastLog, extractFailedBrokers } = require('./lib/filter
 const { diffResults, loadPreviousLog } = require('./lib/diff');
 const { renderAuditMarkdown, writeAuditFile } = require('./lib/audit');
 const { buildStealthScript } = require('./lib/stealth');
+const { launchBrowser }     = require('./lib/browser');
 
 const PREVIEW           = process.argv.includes('--preview');
 const DRY_RUN           = process.argv.includes('--dry-run') || PREVIEW; // --preview implies --dry-run
@@ -207,15 +208,6 @@ if (defunctNames.length > 0) {
   console.log('   These will still run. Remove from brokers.js if site is gone.\n');
 }
 
-// Try local node_modules first, then fall back to global openclaw install
-let chromium;
-try {
-  ({ chromium } = require('playwright'));
-} catch (_) {
-  const fallback = path.join(os.homedir(), '.openclaw', 'plugins', 'node_modules', 'playwright');
-  ({ chromium } = require(fallback));
-}
-
 const isMac = process.platform === 'darwin';
 
 if (process.env.PLAYWRIGHT_BROWSERS_PATH === undefined) {
@@ -275,13 +267,7 @@ async function _mainBody() {
     : (process.platform === 'linux' && !process.env.DISPLAY); // auto: headless in linux containers
   console.log(`🖥  Browser mode: ${headless ? 'headless' : 'headed'}${headlessEnv === undefined && process.platform === 'linux' ? ' (auto-detected)' : ''}`);
 
-  const context = await chromium.launchPersistentContext(profileDir, {
-    headless,
-    viewport: { width: 1280, height: 900 },
-    args: ['--no-first-run', '--disable-blink-features=AutomationControlled'],
-    ignoreDefaultArgs: ['--enable-automation'],
-  });
-  await context.addInitScript(buildStealthScript());
+  const context = await launchBrowser(config, headless, profileDir, buildStealthScript);
 
   // ── Verify mode: T+7 post-submit verification loop ───────────────────────
   if (VERIFY) {
